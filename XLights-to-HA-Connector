@@ -1,0 +1,237 @@
+[
+    {
+        "id": "942f5fc06badcf53",
+        "type": "tab",
+        "label": "xLights to HA Connector",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "floodlight_function",
+        "type": "function",
+        "z": "942f5fc06badcf53",
+        "name": "Map E1.31 Data to Lights",
+        "func": "// Configuration area: define which lights support color temperature and white value\nvar lightConfig = {\n    'light.house_flood_1': { supportsColorTemp: false, supportsWhiteValue: false },\n    'light.house_flood_2': { supportsColorTemp: false, supportsWhiteValue: false },\n    'light.house_flood_3': { supportsColorTemp: false, supportsWhiteValue: false },\n    'light.house_flood_4': { supportsColorTemp: false, supportsWhiteValue: false },\n    'light.house_flood_5': { supportsColorTemp: false, supportsWhiteValue: false },\n    'light.house_flood_6': { supportsColorTemp: false, supportsWhiteValue: false }\n};\n\n// Bright white color temperature (6500K, typically corresponds to 153 in xLights)\n// Set this once at the top for color temperature lights\nvar brightWhiteTemp = 153;  // This corresponds to bright white (6500K)\n\nvar lights = Object.keys(lightConfig);  // Lights to be processed based on the configuration\nvar maxLights = lights.length;  // Dynamically set maxLights based on the number of lights in lightConfig\nvar payload = msg.payload;\n\n// Process only the lights defined in the `lightConfig`\nfor (var i = 0; i < maxLights; i++) {\n    var light = lights[i];\n    var floodlight_on = payload[i * 4] > 0 || payload[i * 4 + 1] > 0 || payload[i * 4 + 2] > 0 || payload[i * 4 + 3] > 0;\n    var rgbw = [\n        payload[i * 4], payload[i * 4 + 1], payload[i * 4 + 2], payload[i * 4 + 3]\n    ]; // Red, Green, Blue, White\n\n    var lightData = {\n        service: floodlight_on ? 'turn_on' : 'turn_off',\n        entity_id: light,\n        data: {}\n    };\n\n    // If the light supports color temperature, pass the color_temp value\n    if (lightConfig[light].supportsColorTemp) {\n        lightData.data = { color_temp: brightWhiteTemp };  // Set to bright white color temperature\n    } else {\n        // If the light supports white value, pass the white_value\n        if (lightConfig[light].supportsWhiteValue && floodlight_on) {\n            lightData.data = {\n                rgb_color: rgbw.slice(0, 3), // Only Red, Green, Blue\n                white_value: rgbw[3] // White value\n            };\n        } else {\n            // Ensure no white_value is passed for lights that do not support it\n            lightData.data = { rgb_color: rgbw.slice(0, 3) };  // Just use RGB color if no white_value\n        }\n    }\n\n    // Send the message for the light\n    node.send({\n        topic: light,\n        payload: lightData\n    });\n}\n\nreturn null; // No need to return anything because each node.send() will pass a message to the next node\n",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 390,
+        "y": 440,
+        "wires": [
+            [
+                "rbe_filter",
+                "3afd345308d90425"
+            ]
+        ]
+    },
+    {
+        "id": "rbe_filter",
+        "type": "rbe",
+        "z": "942f5fc06badcf53",
+        "name": "RBE - Filter Duplicate",
+        "func": "rbe",
+        "gap": "",
+        "start": "",
+        "inout": "out",
+        "septopics": true,
+        "property": "payload",
+        "topi": "topic",
+        "x": 620,
+        "y": 540,
+        "wires": [
+            [
+                "c686b586a4933632",
+                "49e014b90b9adf2e"
+            ]
+        ]
+    },
+    {
+        "id": "floodlight_sacn_in",
+        "type": "sacn_in",
+        "z": "942f5fc06badcf53",
+        "name": "xLights Floodlights Universe",
+        "universe": "13",
+        "interval": 100,
+        "x": 160,
+        "y": 340,
+        "wires": [
+            [
+                "floodlight_function",
+                "6d6c7be7f335605a"
+            ]
+        ]
+    },
+    {
+        "id": "3afd345308d90425",
+        "type": "debug",
+        "z": "942f5fc06badcf53",
+        "name": "MapResults",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 690,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "6d6c7be7f335605a",
+        "type": "debug",
+        "z": "942f5fc06badcf53",
+        "name": "xLightsRequest",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 400,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "c686b586a4933632",
+        "type": "debug",
+        "z": "942f5fc06badcf53",
+        "name": "De-Dupped",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 850,
+        "y": 620,
+        "wires": []
+    },
+    {
+        "id": "1db4fcd3341f1786",
+        "type": "api-call-service",
+        "z": "942f5fc06badcf53",
+        "name": "InteractWithLight",
+        "server": "home_assistant_server",
+        "version": 7,
+        "debugenabled": false,
+        "action": "light.{{payload.service}}",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [
+            "{{payload.entity_id}}"
+        ],
+        "labelId": [],
+        "data": "{    \"rgb_color\": [{{payload.data.rgb_color}}]}",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": true,
+        "domain": "light",
+        "service": "{{payload",
+        "x": 1110,
+        "y": 420,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "52df437e13866f8e",
+        "type": "api-call-service",
+        "z": "942f5fc06badcf53",
+        "name": "InteractWithLightOff",
+        "server": "home_assistant_server",
+        "version": 7,
+        "debugenabled": false,
+        "action": "light.{{payload.service}}",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [
+            "{{payload.entity_id}}"
+        ],
+        "labelId": [],
+        "data": "",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": true,
+        "domain": "light",
+        "service": "{{payload",
+        "x": 1120,
+        "y": 580,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "49e014b90b9adf2e",
+        "type": "switch",
+        "z": "942f5fc06badcf53",
+        "name": "If On",
+        "property": "payload.service",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "turn_on",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "turn_off",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 870,
+        "y": 520,
+        "wires": [
+            [
+                "1db4fcd3341f1786"
+            ],
+            [
+                "52df437e13866f8e"
+            ]
+        ]
+    },
+    {
+        "id": "home_assistant_server",
+        "type": "server",
+        "name": "Home Assistant",
+        "version": 5,
+        "addon": true,
+        "rejectUnauthorizedCerts": true,
+        "ha_boolean": "",
+        "connectionDelay": false,
+        "cacheJson": false,
+        "heartbeat": false,
+        "heartbeatInterval": "30",
+        "areaSelector": "friendlyName",
+        "deviceSelector": "friendlyName",
+        "entitySelector": "friendlyName",
+        "statusSeparator": "at: ",
+        "statusYear": "hidden",
+        "statusMonth": "short",
+        "statusDay": "numeric",
+        "statusHourCycle": "h23",
+        "statusTimeFormat": "h:m",
+        "enableGlobalContextStore": true
+    }
+]
