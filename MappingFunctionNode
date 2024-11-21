@@ -1,0 +1,56 @@
+// Configuration area: define which lights support color temperature and white value
+var lightConfig = {
+    'light.house_flood_1': { supportsColorTemp: false, supportsWhiteValue: false },
+    'light.house_flood_2': { supportsColorTemp: false, supportsWhiteValue: false },
+    'light.house_flood_3': { supportsColorTemp: false, supportsWhiteValue: false },
+    'light.house_flood_4': { supportsColorTemp: false, supportsWhiteValue: false },
+    'light.house_flood_5': { supportsColorTemp: false, supportsWhiteValue: false },
+    'light.house_flood_6': { supportsColorTemp: false, supportsWhiteValue: false }
+};
+
+// Bright white color temperature (6500K, typically corresponds to 153 in xLights)
+// Set this once at the top for color temperature lights
+var brightWhiteTemp = 153;  // This corresponds to bright white (6500K)
+
+var lights = Object.keys(lightConfig);  // Lights to be processed based on the configuration
+var maxLights = lights.length;  // Dynamically set maxLights based on the number of lights in lightConfig
+var payload = msg.payload;
+
+// Process only the lights defined in the `lightConfig`
+for (var i = 0; i < maxLights; i++) {
+    var light = lights[i];
+    var floodlight_on = payload[i * 4] > 0 || payload[i * 4 + 1] > 0 || payload[i * 4 + 2] > 0 || payload[i * 4 + 3] > 0;
+    var rgbw = [
+        payload[i * 4], payload[i * 4 + 1], payload[i * 4 + 2], payload[i * 4 + 3]
+    ]; // Red, Green, Blue, White
+
+    var lightData = {
+        service: floodlight_on ? 'turn_on' : 'turn_off',
+        entity_id: light,
+        data: {}
+    };
+
+    // If the light supports color temperature, pass the color_temp value
+    if (lightConfig[light].supportsColorTemp) {
+        lightData.data = { color_temp: brightWhiteTemp };  // Set to bright white color temperature
+    } else {
+        // If the light supports white value, pass the white_value
+        if (lightConfig[light].supportsWhiteValue && floodlight_on) {
+            lightData.data = {
+                rgb_color: rgbw.slice(0, 3), // Only Red, Green, Blue
+                white_value: rgbw[3] // White value
+            };
+        } else {
+            // Ensure no white_value is passed for lights that do not support it
+            lightData.data = { rgb_color: rgbw.slice(0, 3) };  // Just use RGB color if no white_value
+        }
+    }
+
+    // Send the message for the light
+    node.send({
+        topic: light,
+        payload: lightData
+    });
+}
+
+return null; // No need to return anything because each node.send() will pass a message to the next node
